@@ -7,20 +7,36 @@ import {
   Modal,
   Animated,
   Dimensions,
+  Platform,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { Header } from '../components/Header';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { MockMapView } from '../components/MockMapView';
 import { useAuth } from '../contexts/AuthContext';
 import { useDriver } from '../contexts/DriverContext';
 import { COLORS, SPACING, FONT_SIZE, FONT_WEIGHT, BORDER_RADIUS } from '../constants/theme';
 import { MAPS_CONFIG } from '../constants/config';
 
 const { height } = Dimensions.get('window');
+
+// Dynamically import MapView only if not in Expo Go
+let MapView: any;
+let Marker: any;
+let PROVIDER_GOOGLE: any;
+
+try {
+  const maps = require('react-native-maps');
+  MapView = maps.default;
+  Marker = maps.Marker;
+  PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
+} catch (e) {
+  // Maps not available in Expo Go
+  console.log('React Native Maps not available, using mock map');
+}
 
 export const DashboardScreen = ({ navigation }: any) => {
   const { user } = useAuth();
@@ -37,7 +53,10 @@ export const DashboardScreen = ({ navigation }: any) => {
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [showEarningsModal, setShowEarningsModal] = useState(false);
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
+
+  // Check if MapView is available
+  const isMapAvailable = !!MapView;
 
   useEffect(() => {
     requestLocationPermission();
@@ -98,51 +117,57 @@ export const DashboardScreen = ({ navigation }: any) => {
 
       {/* Map */}
       <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
-          provider={PROVIDER_GOOGLE}
-          style={styles.map}
-          initialRegion={region}
-          showsUserLocation
-          showsMyLocationButton={false}
-        >
-          {location && (
-            <Marker
-              coordinate={{
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-              }}
-              title="Your Location"
-            />
-          )}
+        {isMapAvailable ? (
+          <MapView
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            initialRegion={region}
+            showsUserLocation
+            showsMyLocationButton={false}
+          >
+            {location && (
+              <Marker
+                coordinate={{
+                  latitude: location.coords.latitude,
+                  longitude: location.coords.longitude,
+                }}
+                title="Your Location"
+              />
+            )}
 
-          {activeTrip && (
-            <>
-              <Marker
-                coordinate={activeTrip.pickup.coordinates}
-                title="Pickup"
-                pinColor={COLORS.success}
-              />
-              <Marker
-                coordinate={activeTrip.dropoff.coordinates}
-                title="Dropoff"
-                pinColor={COLORS.danger}
-              />
-            </>
-          )}
-        </MapView>
+            {activeTrip && (
+              <>
+                <Marker
+                  coordinate={activeTrip.pickup.coordinates}
+                  title="Pickup"
+                  pinColor={COLORS.success}
+                />
+                <Marker
+                  coordinate={activeTrip.dropoff.coordinates}
+                  title="Dropoff"
+                  pinColor={COLORS.danger}
+                />
+              </>
+            )}
+          </MapView>
+        ) : (
+          <MockMapView style={styles.map} />
+        )}
 
         {/* Current Location Button */}
-        <TouchableOpacity
-          style={styles.locationButton}
-          onPress={() => {
-            if (location) {
-              mapRef.current?.animateToRegion(region, 1000);
-            }
-          }}
-        >
-          <Ionicons name="locate" size={24} color={COLORS.secondary} />
-        </TouchableOpacity>
+        {isMapAvailable && (
+          <TouchableOpacity
+            style={styles.locationButton}
+            onPress={() => {
+              if (location && mapRef.current) {
+                mapRef.current.animateToRegion(region, 1000);
+              }
+            }}
+          >
+            <Ionicons name="locate" size={24} color={COLORS.secondary} />
+          </TouchableOpacity>
+        )}
 
         {/* Earnings Island (when online) */}
         {isOnline && (
